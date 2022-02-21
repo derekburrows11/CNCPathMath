@@ -1,0 +1,547 @@
+----------------------------------
+  Fitting cubic to V(s)
+----------------------------------
+
+	----- Best cubic fit ------
+
+	S(...) = sum(...)
+	note S(s^0) = N	number of points
+
+	V = a0 + a1.x + a2.s^2 + a3.s^3
+
+	Sum of residuals squared = Sr
+		Sr uses all the sums S(s^0..6) plus S(v^2)
+	Sr = Sum((v - V)^2)		where v is actual value and V is cubic value
+
+	Sr = S(v^2) + a0^2.S(s^0) + a1^2.S(s^2) + a2^2.S(s^4) + a3^2.S(s^6)
+		- 2{ a0.S(s^0.v) + a1.S(s^1.v) + a2.S(s^2.v) + a3.S(s^3.v) }
+		+ 2{ a0.a1.S(s^1) + a0.a2.S(s^2) + (a0.a3+a1.a2).S(s^3) + a1.a3.S(s^4) + a2.a3.S(s^5) }
+
+	Sr = S(v^2) + (vta' * mxS * vta) - 2*(vta' * vtSv)
+	if (mxS * vta == vtSv)		(only if no other boundary conditions)
+	->  Sr = S(v^2) - (vta' * vtSv)
+
+
+
+	dSr/da0     [ S(s^0)  S(s^1)  S(s^2)  S(s^3) ]   a0     S(s^0.v)
+	dSr/da1 = 2*[ S(s^1)  S(s^2)  S(s^3)  S(s^4) ] * a1 - 2*S(s^1.v)
+	dSr/da2     [ S(s^2)  S(s^3)  S(s^4)  S(s^5) ]   a2     S(s^2.v)
+	dSr/da3     [ S(s^3)  S(s^4)  S(s^5)  S(s^6) ]   a3     S(s^3.v)
+
+	->  vtdSra = 2 * (mxS * vta - vtSv) = 0
+	->  mxS * vta = vtSv
+
+	For minimum Sr all dSr/da are 0.  Therefor:
+	[ S(s^0)  S(s^1)  S(s^2)  S(s^3) ]   a0   S(s^0.v)
+	[ S(s^1)  S(s^2)  S(s^3)  S(s^4) ] * a1 = S(s^1.v)
+	[ S(s^2)  S(s^3)  S(s^4)  S(s^5) ]   a2   S(s^2.v)
+	[ S(s^3)  S(s^4)  S(s^5)  S(s^6) ]   a3   S(s^3.v)
+
+	mxS =
+	[ S(s^0)  S(s^1)  S(s^2)  S(s^3) ]
+	[ S(s^1)  S(s^2)  S(s^3)  S(s^4) ]
+	[ S(s^2)  S(s^3)  S(s^4)  S(s^5) ]
+	[ S(s^3)  S(s^4)  S(s^5)  S(s^6) ]
+
+	vtSv =
+	[ S(s^0.v) ]
+	[ S(s^1.v) ]
+	[ S(s^2.v) ]
+	[ S(s^3.v) ]
+
+	vta =
+	[ a0 ]
+	[ a1 ]
+	[ a2 ]
+	[ a3 ]
+
+
+
+
+-------------------------
+	With end boundary conditions
+
+	Pos and Vel fixed at sa
+	Psa = Pos(sa), Vsa = Vel(sa)
+
+	[ 1        sa       sa^2     sa^3 ]   a0    Pos(sa)
+	[ 0        1       2sa      3sa^2 ] * a1 =  Vel(sa)
+	                                      a2
+	                                      a3
+	mxBCs * vta = vtBCs
+	vta = [a0 a1 a2 a3]'
+
+	Write BC's - A2, A3 are remaining DOF's
+	[ 1        sa       sa^2     sa^3 ]   a0    Pos(sa)
+	[ 0        1       2sa      3sa^2 ] * a1 =  Vel(sa)
+	[ 0        0        1        0    ]   a2    A2
+	[ 0        0        0        1    ]   a3    A3
+	mxa2A * vta = vtA
+	vtA = [Pos(sa) Vel(sa) A2 A3]'
+	mxa2A contains boundary conditions and vtA has two knowns
+
+
+	Invert  (find a1 then a0)
+	[ 1       -sa       sa^2    2sa^3 ]   Pos(sa)   a0			// row1 - sa*row2 of original
+	[ 0        1      -2sa     -3sa^2 ] * Vel(sa) = a1
+	[ 0        0        1        0    ]   A2        a2
+	[ 0        0        0        1    ]   A3        a3
+	mxA2a * vtA = vta
+
+
+	dSr/dA2 = dSra/da3 * da3/dA2 + dSra/da2 * da2/dA2 + dSra/da1 * da1/dA2 + dSra/da0 * da0/dA2 = 0		// from all dependent params
+	-->
+	dSr/dA2   [ da0/dA2  da1/dA2  da2/dA2  da3/dA2 ]   dSra/da0     0
+	dSr/dA3 = [ da0/dA3  da1/dA3  da2/dA3  da3/dA3 ] * dSra/da1  =  0
+	                                                   dSra/da2
+	                                                   dSra/da3
+
+	-> vtdSrRed = mxda * vtdSra = 0
+
+	-> mxda = [  sa^2   -2sa     1    0 ]
+	          [ 2sa^3   -3sa^2   0    1 ]
+
+	mxda is found from mxA2a. Is transpose of A2, A3 coeff columns
+
+	     
+	as:   vtdSrRed = mxda * vtdSra = 0
+	and:  vtdSra = 2 * (mxS * vta  -  vtSv)
+
+	mxda * mxS * vta  =  mxda * vtSv		// 2 equ's		(note: mxda doesn't have an inverse - not square!)
+	     mxBCs * vta  =  vtBCs				// 2 equ's
+	  ( mxSBCs * vta  =  vtSyBCs )
+
+	(mxda * mxS * mxA2a) * vtA  =  mxda * vtSv		// 2 equ's for the 2 unknowns in vtA
+	use columns of (mxda * mxS * mxA2a) associated with unknowns for inverse
+	use columns of (mxda * mxS * mxA2a) associated with knowns to multipy and subtract from rhs
+
+	(mxda*mxS) * mxA2a(uc) * vtA(ur)  =  mxda * vtSv - (mxda*mxS) * mxA2a(kc) * vtA(kr)
+	uc = unknown columns
+	kc = known columns
+
+	note:  mxda = mxA2a(uc)'
+	(mxda*mxS) * mxda' * vtA(ur)  =  mxda * vtSv - (mxda*mxS) * mxA2a(kc) * vtA(kr)
+	mxda * mxS * mxda' * vtA(ur)  =  mxda * (vtSv - mxS * mxA2a(kc) * vtA(kr))
+
+
+
+
+
+
+
+
+
+
+----------------------------------------------------
+  Fitting cubic to parametric X(s), Y(s), Z(s)
+----------------------------------------------------
+
+	double x, s, sPow;
+
+	Num++;
+	SumXSp[0] += x;
+	SumSp[1]  += (sPow = s);
+	SumXSp[1] += sPow * x;
+	SumSp[2]  += (sPow *= s);
+	SumXSp[2] += sPow * x;
+	SumSp[3]  += (sPow *= s);
+	SumXSp[3] += sPow * x;
+	SumSp[4]  += (sPow *= s);
+	SumSp[5]  += (sPow *= s);
+	SumSp[6]  += (sPow * s);
+	SumX2 += x * x;		// needed to calc residual error (sum of squares)
+
+-------------------------------------
+
+	Best cubic fit
+	X = ax0 + ax1.s + ax2.s^2 + ax3.s^3
+	Y = ay0 + ay1.s + ay2.s^2 + ay3.s^3
+	Z = az0 + az1.s + az2.s^2 + az3.s^3
+
+	Sum of residuals squared = Sr
+		Sr uses all the sums S(s^0..6) plus S(y^2)
+	Sr = Sum((y - Y)^2)		where y is actual value and Y is cubic value
+
+	Sr = S(y^2) + a0^2.S(s^0) + a1^2.S(s^2) + a2^2.S(s^4) + a3^2.S(s^6)
+		+ 2{-a0.S(s^0.y) - a1.S(s^1.y) - a2.S(s^2.y) - a3.S(s^3.y) }
+		+ 2{ a0.a1.S(s^1) + a0.a2.S(s^2) + (a0.a3+a1.a2).S(s^3) + a1.a3.S(s^4) + a2.a3.S(s^5) }
+
+		S(...) = sum(...)
+		note S(s^0) = N	number of points
+
+	dSr/dax0     [ S(s^0)  S(s^1)  S(s^2)  S(s^3) ]   ax0     S(s^0.x)
+	dSr/dax1 = 2*[ S(s^1)  S(s^2)  S(s^3)  S(s^4) ] * ax1 - 2*S(s^1.x)
+	dSr/dax2     [ S(s^2)  S(s^3)  S(s^4)  S(s^5) ]   ax2     S(s^2.x)
+	dSr/dax3     [ S(s^3)  S(s^4)  S(s^5)  S(s^6) ]   ax3     S(s^3.x)
+
+	For minimum Sr all dSr/da are 0.  Therefor:
+	[ S(s^0)  S(s^1)  S(s^2)  S(s^3) ]   ax0   S(s^0.x)
+	[ S(s^1)  S(s^2)  S(s^3)  S(s^4) ] * ax1 = S(s^1.x)
+	[ S(s^2)  S(s^3)  S(s^4)  S(s^5) ]   ax2   S(s^2.x)
+	[ S(s^3)  S(s^4)  S(s^5)  S(s^6) ]   ax3   S(s^3.x)
+
+	--> vtdSrax = 2 * mxS * vtax  -  2 * vtSx
+	->  mxS * vtax  =  vtSx
+
+-------------------------
+	Fit one 3D parametric poly with initial position and direction boundary conditions
+
+
+	Initial Pos(0) fixed and Vel(0) direction fixed and initial x = 0:
+	ax0 = x(0), ay0 = y(0), az0 = z(0)
+	ax1 = k.Vx(0), ay1 = k.Vy(0), az1 = k.Vz(0)		where k is an unknown (>0)
+	Vx = Vx(0)
+	x0 = x(0)
+
+	[ Vx.S(s^2)  S(s^3)  S(s^4) ]    k      S(s^1.x)   [ S(s^1) ]
+	[ Vx.S(s^3)  S(s^4)  S(s^5) ] * ax2  =  S(s^2.x) - [ S(s^2) ] * x0
+	[ Vx.S(s^4)  S(s^5)  S(s^6) ]   ax3     S(s^3.x)   [ S(s^3) ]
+
+
+	dSr/dax0   [ S(s^0)  Vx.S(s^1)  S(s^2)  S(s^3) ]    x0   S(s^0.x)
+	dSr/dax1   [ S(s^1)  Vx.S(s^2)  S(s^3)  S(s^4) ]    k    S(s^1.x)
+	dSr/dax2   [ S(s^2)  Vx.S(s^3)  S(s^4)  S(s^5) ]   ax2   S(s^2.x)
+	dSr/dax3   [ S(s^3)  Vx.S(s^4)  S(s^5)  S(s^6) ]   ax3   S(s^3.x)
+	dSr/day0   [ S(s^0)  Vy.S(s^1)  S(s^2)  S(s^3) ]    y0   S(s^0.y)
+	dSr/day1 = [ S(s^1)  Vy.S(s^2)  S(s^3)  S(s^4) ] *  k  - S(s^1.y)
+	dSr/day2   [ S(s^2)  Vy.S(s^3)  S(s^4)  S(s^5) ]   ay2   S(s^2.y)
+	dSr/day3   [ S(s^3)  Vy.S(s^4)  S(s^5)  S(s^6) ]   ay3   S(s^3.y)
+	dSr/daz0   [ S(s^0)  Vz.S(s^1)  S(s^2)  S(s^3) ]    z0   S(s^0.z)
+	dSr/daz1   [ S(s^1)  Vz.S(s^2)  S(s^3)  S(s^4) ]    k    S(s^1.z)
+	dSr/daz2   [ S(s^2)  Vz.S(s^3)  S(s^4)  S(s^5) ]   az2   S(s^2.z)
+	dSr/daz3   [ S(s^3)  Vz.S(s^4)  S(s^5)  S(s^6) ]   az3   S(s^3.z)
+
+dSr/da?0 equ's not used as x0, y0, z0 fixed
+	dSrx/dk    Vx.[ Vx.S(s^2)  S(s^3)  S(s^4) 0 0 ]    k    Vx.S(s^1.x)   Vx.x0.S(s^1)
+	dSr/dax2      [ Vx.S(s^3)  S(s^4)  S(s^5) 0 0 ]   ax2      S(s^2.x)      x0.S(s^2)
+	dSr/dax3      [ Vx.S(s^4)  S(s^5)  S(s^6) 0 0 ]   ax3      S(s^3.x)      x0.S(s^3)
+	dSry/dk  = Vy.[ 0 Vy.S(s^2)  S(s^3)  S(s^4) 0 ] *  k  - Vy.S(s^1.y) + Vy.y0.S(s^1)
+	dSr/day2      [ 0 Vy.S(s^3)  S(s^4)  S(s^5) 0 ]   ay2      S(s^2.y)      y0.S(s^2)
+	dSr/day3      [ 0 Vy.S(s^4)  S(s^5)  S(s^6) 0 ]   ay3      S(s^3.y)      y0.S(s^3)
+	dSrz/dk    Vz.[ 0 0 Vz.S(s^2)  S(s^3)  S(s^4) ]    k    Vz.S(s^1.z)   Vz.z0.S(s^1)
+	dSr/daz2      [ 0 0 Vz.S(s^3)  S(s^4)  S(s^5) ]   az2      S(s^2.z)      z0.S(s^2)
+	dSr/daz3      [ 0 0 Vz.S(s^4)  S(s^5)  S(s^6) ]   az3      S(s^3.z)      z0.S(s^3)
+
+dSr/da?2 = 0, dSr/da?3 = 0
+dSr/dk = dSrx/dk + dSry/dk + dSrz/dk = 0
+
+	mxS * vta = vtVal
+
+	vta = [ k  ax2  ax3  ay2  ay3  az2  az3 ]'
+
+	      [ (Vx^2+Vy^2+Vz^2).S(s^2)  Vx.S(s^3)  Vx.S(s^4)  Vy.S(s^3)  Vy.S(s^4)  Vz.S(s^3)  Vz.S(s^4) ]
+	      [  Vx.S(s^3)                  S(s^4)     S(s^5)     0          0          0          0      ]
+	      [  Vx.S(s^4)                  S(s^5)     S(s^6)     0          0          0          0      ]
+	mxS = [  Vy.S(s^3)                  0          0          S(s^4)     S(s^5)     0          0      ]
+	      [  Vy.S(s^4)                  0          0          S(s^5)     S(s^6)     0          0      ]
+	      [  Vz.S(s^3)                  0          0          0          0          S(s^4)     S(s^5) ]
+	      [  Vz.S(s^4)                  0          0          0          0          S(s^5)     S(s^6) ]
+
+	        [ Vx.S(s^1.x)+Vy.S(s^1.y)+Vz.S(s^1.z) - (Vx.x0+Vy.y0+Vz.z0).S(s^1)  ]
+	        [ S(s^2.x)   -   x0.S(s^2)  ]
+	        [ S(s^3.x)   -   x0.S(s^3)  ]
+	vtVal = [ S(s^2.y)   -   y0.S(s^2)  ]
+	        [ S(s^3.y)   -   y0.S(s^3)  ]
+	        [ S(s^2.z)   -   z0.S(s^2)  ]
+	        [ S(s^3.z)   -   z0.S(s^3)  ]
+
+
+--------------------------------------------------
+	Fit one 3D parametric poly with initial and final position and direction boundary conditions
+
+
+	Initial Pos(0) fixed and Vel(0) direction fixed and initial x = 0:
+	Final Pos(0) fixed and Vel(0) direction fixed and initial x = 0:
+	ax0 = x(0), ay0 = y(0), az0 = z(0)
+	ax1 = k.Vx(0), ay1 = k.Vy(0), az1 = k.Vz(0)		where k is an unknown (>0)
+	Vx = Vx(0)
+	x0 = x(0)
+
+	[ Vx.S(s^2)  S(s^3)  S(s^4) ]    k      S(s^1.x)   [ S(s^1) ]
+	[ Vx.S(s^3)  S(s^4)  S(s^5) ] * ax2  =  S(s^2.x) - [ S(s^2) ] * x0
+	[ Vx.S(s^4)  S(s^5)  S(s^6) ]   ax3     S(s^3.x)   [ S(s^3) ]
+
+	dSr/dax0   [ S(s^0)  Vx.S(s^1)  S(s^2)  S(s^3) ]    x0   S(s^0.x)
+	dSr/dax1   [ S(s^1)  Vx.S(s^2)  S(s^3)  S(s^4) ]    k    S(s^1.x)
+	dSr/dax2   [ S(s^2)  Vx.S(s^3)  S(s^4)  S(s^5) ]   ax2   S(s^2.x)
+	dSr/dax3   [ S(s^3)  Vx.S(s^4)  S(s^5)  S(s^6) ]   ax3   S(s^3.x)
+	dSr/day0   [ S(s^0)  Vy.S(s^1)  S(s^2)  S(s^3) ]    y0   S(s^0.y)
+	dSr/day1 = [ S(s^1)  Vy.S(s^2)  S(s^3)  S(s^4) ] *  k  - S(s^1.y)
+	dSr/day2   [ S(s^2)  Vy.S(s^3)  S(s^4)  S(s^5) ]   ay2   S(s^2.y)
+	dSr/day3   [ S(s^3)  Vy.S(s^4)  S(s^5)  S(s^6) ]   ay3   S(s^3.y)
+	dSr/daz0   [ S(s^0)  Vz.S(s^1)  S(s^2)  S(s^3) ]    z0   S(s^0.z)
+	dSr/daz1   [ S(s^1)  Vz.S(s^2)  S(s^3)  S(s^4) ]    k    S(s^1.z)
+	dSr/daz2   [ S(s^2)  Vz.S(s^3)  S(s^4)  S(s^5) ]   az2   S(s^2.z)
+	dSr/daz3   [ S(s^3)  Vz.S(s^4)  S(s^5)  S(s^6) ]   az3   S(s^3.z)
+
+
+	single axis:
+	vta   = [ax0 ax1 ax2 ax3]		polynomial coefficents
+	vtbez = [nx0 cx0 cx1 nx1]		bezier nodes
+	vtA   = [x0 x1 k0 k1]			end nodes and velocity factors
+
+	mxA2bez =
+	[ 1    0    0    0   ]
+	[ 1    0  Vx0/3  0   ]
+	[ 0    1    0 -Vx1/3 ]
+	[ 0    1    0    0   ]
+
+	mxbez2a =
+    [ 1    0    0    0 ]
+	[-3    3    0    0 ]
+    [ 3   -6    3    0 ]
+	[-1    3   -3    1 ]
+
+	mxA2a =
+	[ 1    0    0    0   ]
+	[ 0    0   Vx0   0   ]
+	[-3    3 -2Vx0 -Vx1  ]
+	[ 2   -2   Vx0  Vx1  ]
+
+-------
+	mxbez2A =
+	[ 1     0     0     0     ]
+	[ 0     0     0     1     ]
+	[-3/Vx0 3/Vx0 0     0     ]
+	[ 0     0   -3/Vx1  3/Vx1 ]
+
+	mxpa2bez =
+    [ 1    0    0    0 ]
+    [ 1  1/3    0    0 ]
+    [ 1  2/3  1/3    0 ]
+    [ 1    1    1    1 ]
+
+	mxa2A =
+	[ 1     0     0     0   ]
+	[ 1     1     1     1   ]
+	[ 0   1/Vx0   0     0   ]
+	[ 0   1/Vx1 2/Vx1 3/Vx1 ]
+
+--------
+
+	3 axis:
+	vta = [ax0 ax1 ax2 ax3 ay0 ay1 ay2 ay3 az0 az1 az2 az3]'
+	vtA = [x0 x1 y0 y1 z0 z1 k0 k1]'
+
+	mxa2A =
+	[ 1     0     0     0     0     0     0     0     0     0     0     0   ]
+	[ 1     1     1     1     0     0     0     0     0     0     0     0   ]
+	[ 0     0     0     0     1     0     0     0     0     0     0     0   ]
+	[ 0     0     0     0     1     1     1     1     0     0     0     0   ]
+	[ 0     0     0     0     0     0     0     0     1     0     0     0   ]
+	[ 0     0     0     0     0     0     0     0     1     1     1     1   ]
+	[ 0   1/Vx0   0     0   ]
+	[ 0   1/Vx1 2/Vx1 3/Vx1 ]
+or	                        [ 0   1/Vy0   0     0   ]
+	                        [ 0   1/Vy1 2/Vy1 3/Vy1 ]
+or	                                                [ 0   1/Vz0   0     0   ]
+	                                                [ 0   1/Vz1 2/Vz1 3/Vz1 ]
+
+	mxA2a =
+	[ 1    0    0    0    0    0    0    0   ]
+	[ 0    0    0    0    0    0   Vx0   0   ]
+	[-3    3    0    0    0    0 -2Vx0 -Vx1  ]
+	[ 2   -2    0    0    0    0   Vx0  Vx1  ]
+	[ 0    0    1    0    0    0    0    0   ]
+	[ 0    0    0    0    0    0   Vy0   0   ]
+	[ 0    0   -3    3    0    0 -2Vy0 -Vy1  ]
+	[ 0    0    2   -2    0    0   Vy0  Vy1  ]
+	[ 0    0    0    0    1    0    0    0   ]
+	[ 0    0    0    0    0    0   Vz0   0   ]
+	[ 0    0    0    0   -3    3 -2Vz0 -Vz1  ]
+	[ 0    0    0    0    2   -2   Vz0  Vz1  ]
+
+	mxda = transpose of unknown columns of mxA2a
+	[ 0  Vx0 -2Vx0  Vx0   0  Vy0 -2Vy0  Vy0   0  Vz0 -2Vz0  Vz0 ]
+	[ 0    0  -Vx1  Vx1   0    0  -Vy1  Vy1   0    0  -Vz1  Vz1 ]
+
+	mxda * mxS * vta  =  mxda * vtSv
+	(mxda*mxS) * mxda' * vtA(ur)  =  mxda * vtSv - (mxda*mxS) * mxA2a(kc) * vtA(kr)
+
+
+
+
+--------------------------------------------------
+	Fit two 3D parametric polys with initial pos and dir, and continuous pos and derivatives at knot boundary conditions
+
+	mxS * vta - vtVal = vtdS / 2
+
+	vta = [ ax0 ax1 ax2 ax3 ay0 ay1 ay2 ay3 az0 az1 az2 az3 ]'
+
+	      [ S(s^0)  S(s^1)  S(s^2)  S(s^3)                                                                       ]
+	      [ S(s^1)  S(s^2)  S(s^3)  S(s^4)                                                                       ]
+	      [ S(s^2)  S(s^3)  S(s^4)  S(s^5)                                                                       ]
+	      [ S(s^3)  S(s^4)  S(s^5)  S(s^6)                                                                       ]
+	      [                                    S(s^0)  S(s^1)  S(s^2)  S(s^3)                                    ]
+	mxS = [                                    S(s^1)  S(s^2)  S(s^3)  S(s^4)                                    ]
+	      [                                    S(s^2)  S(s^3)  S(s^4)  S(s^5)                                    ]
+	      [                                    S(s^3)  S(s^4)  S(s^5)  S(s^6)                                    ]
+	      [                                                                       S(s^0)  S(s^1)  S(s^2)  S(s^3) ]
+	      [                                                                       S(s^1)  S(s^2)  S(s^3)  S(s^4) ]
+	      [                                                                       S(s^2)  S(s^3)  S(s^4)  S(s^5) ]
+	      [                                                                       S(s^3)  S(s^4)  S(s^5)  S(s^6) ]
+
+	        [ S(s^0.x) ]
+	        [ S(s^1.x) ]
+	        [ S(s^2.x) ]
+	        [ S(s^3.x) ]
+	        [ S(s^0.y) ]
+   vtSVal = [ S(s^1.y) ]
+	        [ S(s^2.y) ]
+	        [ S(s^3.y) ]
+	        [ S(s^0.z) ]
+	        [ S(s^1.z) ]
+	        [ S(s^2.z) ]
+	        [ S(s^3.z) ]
+
+	       [ dSr/dax0 ]
+	       [ dSr/dax1 ]
+	       [ dSr/dax2 ]
+	       [ dSr/dax3 ]
+	       [ dSr/day0 ]
+	vtdS = [ dSr/day1 ]
+	       [ dSr/day2 ]
+	       [ dSr/day3 ]
+	       [ dSr/daz0 ]
+	       [ dSr/daz1 ]
+	       [ dSr/daz2 ]
+	       [ dSr/daz3 ]
+
+--------
+	mxSab * vtab  - vtSabVal = vtdSab / 2
+
+	vtab = [ ax0 ax1 ax2 ax3 ay0 ay1 ay2 ay3 az0 az1 az2 az3    bx0 bx1 bx2 bx3 by0 by1 by2 by3 bz0 bz1 bz2 bz3]'
+	vtab = [ ax0 kai ax2 ax3 ay0 kai ay2 ay3 az0 kai az2 az3    bx0 bx1 bx2 bx3 by0 by1 by2 by3 bz0 bz1 bz2 bz3]'
+
+		  [ Sa(s^0)  Vx.Sa(s^1)  Sa(s^2)  Sa(s^3)
+		  [ Sa(s^1)  Vx.Sa(s^2)  Sa(s^3)  Sa(s^4)
+		  [ Sa(s^2)  Vx.Sa(s^3)  Sa(s^4)  Sa(s^5)
+		  [ Sa(s^3)  Vx.Sa(s^4)  Sa(s^5)  Sa(s^6)
+		  [                                       Sa(s^0)  Vy.Sa(s^1)  Sa(s^2)  Sa(s^3)
+  mxSab = [                                       Sa(s^1)  Vy.Sa(s^2)  Sa(s^3)  Sa(s^4)
+		  [                                       Sa(s^2)  Vy.Sa(s^3)  Sa(s^4)  Sa(s^5)
+		  [                                       Sa(s^3)  Vy.Sa(s^4)  Sa(s^5)  Sa(s^6)
+		  [                                                                             Sa(s^0)  Vz.Sa(s^1)  Sa(s^2)  Sa(s^3)
+		  [                                                                             Sa(s^1)  Vz.Sa(s^2)  Sa(s^3)  Sa(s^4)
+		  [                                                                             Sa(s^2)  Vz.Sa(s^3)  Sa(s^4)  Sa(s^5)
+		  [                                                                             Sa(s^3)  Vz.Sa(s^4)  Sa(s^5)  Sa(s^6)
+		  [                                                                                                                   Sb(s^0)  Sb(s^1)  Sb(s^2)  Sb(s^3)
+		  [                                                                                                                   Sb(s^1)  Sb(s^2)  Sb(s^3)  Sb(s^4)
+		  [                                                                                                                   Sb(s^2)  Sb(s^3)  Sb(s^4)  Sb(s^5)
+		  [                                                                                                                   Sb(s^3)  Sb(s^4)  Sb(s^5)  Sb(s^6)
+		  [                                                                                                                                                      Sb(s^0)  Sb(s^1)  Sb(s^2)  Sb(s^3)
+		  [                                                                                                                                                      Sb(s^1)  Sb(s^2)  Sb(s^3)  Sb(s^4)
+		  [                                                                                                                                                      Sb(s^2)  Sb(s^3)  Sb(s^4)  Sb(s^5)
+		  [                                                                                                                                                      Sb(s^3)  Sb(s^4)  Sb(s^5)  Sb(s^6)
+		  [                                                                                                                                                                                         Sb(s^0)  Sb(s^1)  Sb(s^2)  Sb(s^3)
+		  [                                                                                                                                                                                         Sb(s^1)  Sb(s^2)  Sb(s^3)  Sb(s^4)
+		  [                                                                                                                                                                                         Sb(s^2)  Sb(s^3)  Sb(s^4)  Sb(s^5)
+		  [                                                                                                                                                                                         Sb(s^3)  Sb(s^4)  Sb(s^5)  Sb(s^6)
+
+
+
+	PosA(0) = Pos0
+	VelA(0) = k.Vel0
+	PosA(sb) = PosB(sb)
+	VelA(sb) = VelB(sb)
+
+	mxBCs * vtab = vtBCsAB
+
+		  [	1	0	0	0
+  mxBCs = [	0	Vx	0	0
+		  [					1	0	0	0
+		  [					0	Vy	0	0
+		  [									1	0	0	0
+		  [									0	Vz	0	0
+		  [	1 Vx.sb sb^2 sb^3								-1 -sb -sb^2 -sb^3
+		  [	0	Vx	2sb	3sb^2								0	-1	-2sb -3sb^2
+		  [					1 Vy.sb sb^2 sb^3									-1 -sb -sb^2 -sb^3
+		  [					0	Vy	2sb	3sb^2									0	-1	-2sb -3sb^2
+		  [									1 Vz.sb sb^2 sb^3										-1 -sb -sb^2 -sb^3
+		  [									0	Vz	2sb	3sb^2										0	-1	-2sb -3sb^2
+
+
+	vtBCsAB = [ PosX0 VelX0 Ax2 Ax3 PosY0 VelY0 Ay2 Ay3 PosZ0 VelZ0 Az2 Az3   0 0 Bx2 Bx3 0 0 By2 By3 0 0 Bz2 Bz3 ]'
+	inv(mxBCs) * vtBCsAB = vtab
+
+	[	1
+	[		1/Vx
+	[			1
+	[				1
+	[					1
+	[						1/Vx
+	[							1
+	[								1
+	[									1
+	[										1/Vx
+	[	1 Vx.sb sb^2 sb^3								-1 -sb -sb^2 -sb^3
+	[	0	Vx	2sb	3sb^2								0	-1	-2sb -3sb^2
+	[
+
+
+
+	vtAB = [ Pos(sa)  Vel(sa)  A2  A3  0  0  B2  B3 ]'
+
+	          [ 1       -sa       sa^2     2sa^3       0      0      0        0    ]
+	mxAB2ab = [ 0        1      -2sa      -3sa^2       0      0      0        0    ]
+	          [ 0        0        1         0          0      0      0        0    ]
+	          [ 0        0        0         1          0      0      0        0    ]
+	          [ 1       -sa  sa^2-xb^2   2sa^3-2xb^3  -1      xb     xb^2    2xb^3 ]
+	          [ 0        1   2xb-2sa     3xb^2-3sa^2   0     -1    -2xb     -3xb^2 ]
+	          [ 0        0        0         0          0      0      1        0    ]
+	          [ 0        0        0         0          0      0      0        1    ]
+
+	------------------------------
+	mxdab * mxSab * vtab  =  mxdab * vtSabVal		// ? equ's
+	        mxBCs * vtab  =  vtBCs					// ? equ's
+
+
+
+
+
+
+------------------------------------------------------------------
+BSpline - NURBS - CAD file methods
+------------------------------------------------------------------
+
+BSpline with end position knot and no knot outside of line extents
+End direction is end knot to next knot
+
+assume standard BSpline knots
+k(-1)  k(0)  k(1)  k(2)  ...
+line starts from k(0)
+
+new knots:
+c(0)  c(1)  c(2)  c(3)  ...
+pos(0) = c(0)
+vel(0) = c(1) - c(0)
+k(1) = c(2)
+k(2) = c(3)  etc
+
+pos(0) = (k(-1) + 4k(0) + k(1)) / 6
+vel(0) = (k(1) -  k(-1)) / 2
+
+c(0) = (k(-1) + 4k(0) + k(1)) / 6
+c(1) = (-k(-1) + 2k(0) + 2k(1)) / 3
+c(2) = k(1)
+
+=>
+
+k(-1) = 2c(0) - 2c(1) + c(2)
+k(0)  = (2c(0) + c(1) - c(2)) / 2
+k(1)  = c(2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
